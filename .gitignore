@@ -1,0 +1,13 @@
+# Binaries for programs and plugins
+tsquery
+
+# Build
+dist/
+
+# IDE and dev tools
+.idea
+.mise.toml
+.__dev
+todo.xit
+.aider*
+.env
