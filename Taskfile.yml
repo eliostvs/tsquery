@@ -33,7 +33,7 @@ tasks:
   run:
     desc: run app in development mode
     cmds:
-      - go run dist/{{.NAME}} {{.CLI_ARGS}}
+      - go run ./cmd/{{.NAME}} {{.CLI_ARGS}}
 
   format:
     desc: format files
