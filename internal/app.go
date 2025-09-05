@@ -17,7 +17,7 @@ type options struct {
 }
 
 func app(ctx context.Context, opts options) error {
-	errs := make(chan error, 1)
+	errs := make(chan error, 100)
 
 	if opts.timeout == 0 {
 		opts.timeout = 5 * time.Minute
@@ -44,7 +44,6 @@ func app(ctx context.Context, opts options) error {
 	for err := range errs {
 		errorList = append(errorList, err)
 	}
-
 	if len(errorList) > 0 {
 		return errors.Join(errorList...)
 	}
