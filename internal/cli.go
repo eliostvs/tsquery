@@ -10,7 +10,8 @@ import (
 )
 
 const (
-	appName = "tsquery"
+	appName     = "tsquery"
+	workersFlag = "workers"
 )
 
 var (
@@ -27,7 +28,7 @@ func CLI(args []string, stdout io.Writer, stderr io.Writer) int {
 		UsageText: "<query> <file|directory>",
 		Flags: []cli.Flag{
 			&cli.IntFlag{
-				Name:  "workers",
+				Name:  workersFlag,
 				Usage: "number of parallel workers",
 				Value: 2,
 			},
@@ -48,7 +49,7 @@ func CLI(args []string, stdout io.Writer, stderr io.Writer) int {
 				return fmt.Errorf("too many arguments")
 			}
 
-			return app(ctx, options{query: query, workers: cmd.IntArg("workers"), root: root, stdout: stdout})
+			return app(ctx, options{query: query, workers: cmd.Int(workersFlag), root: root, stdout: stdout})
 		},
 		Commands: []*cli.Command{
 			{
