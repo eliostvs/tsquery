@@ -89,18 +89,12 @@ func analyzeFilePipeline(ctx context.Context, query string, paths <-chan string,
 
 	go func() {
 		defer close(results)
-		for path := range paths {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
 
+		for path := range paths {
 			result, err := analyzeFile(ctx, path, query)
 			if err != nil {
 				select {
 				case errs <- err:
-					continue
 				case <-ctx.Done():
 					return
 				}
