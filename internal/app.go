@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"sync"
+	"time"
 )
 
 type options struct {
@@ -12,46 +12,44 @@ type options struct {
 	workers int
 	root    string
 	stdout  io.Writer
+	timeout time.Duration
 }
 
 func app(ctx context.Context, opts options) error {
-	ctx, cancel := context.WithCancel(ctx)
+	errs := make(chan error, 1)
 
-	defer func() {
-		cancel()
-	}()
-
-	paths, errc := walkDir(ctx, opts.root)
-	results := make(chan result)
-	var wg sync.WaitGroup
-	wg.Add(opts.workers)
-
-	for i := 0; i < opts.workers; i++ {
-		go func() {
-			analyzers(ctx, opts.query, paths, results)
-			wg.Done()
-		}()
+	if opts.timeout == 0 {
+		opts.timeout = time.Minute
 	}
 
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
+	ctxt, cancel := context.WithTimeout(ctx, opts.timeout)
+	defer cancel()
 
-	for result := range results {
-		if result.err != nil {
-			fmt.Fprintf(opts.stdout, "%s: %s", result.path, result.err.Error())
-		}
+	paths := walkDirPipeline(ctxt, opts.root, errs)
 
-		for _, capture := range result.captures {
-			fmt.Fprintf(opts.stdout, "%s:%d:%d\n", result.path, capture.row, capture.column)
-			fmt.Fprintln(opts.stdout, capture.content)
-		}
+	workers := fanOut(ctxt, paths, opts.workers)
+
+	var channels []<-chan *Result
+	for _, ch := range workers {
+		channels = append(channels, analyzeFilePipeline(ctxt, opts.query, ch, errs))
 	}
 
-	if err := <-errc; err != nil {
+	results := fanIn(ctxt, channels...)
+
+	printResults(opts.stdout, results)
+
+	if err := <-errs; err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func printResults(stdout io.Writer, results <-chan *Result) {
+	for result := range results {
+		for _, capture := range result.Captures {
+			fmt.Fprintf(stdout, "%s:%d:%d\n", result.Filepath, capture.Row, capture.Column)
+			fmt.Fprintln(stdout, capture.Content)
+		}
+	}
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -12,13 +11,18 @@ import (
 	sitter "github.com/smacker/go-tree-sitter"
 )
 
-type capture struct {
-	content string
-	row     uint32
-	column  uint32
+type Capture struct {
+	Content string
+	Row     uint32
+	Column  uint32
 }
 
-func analyzeFile(ctx context.Context, path, query string) ([]capture, error) {
+type Result struct {
+	Filepath string
+	Captures []Capture
+}
+
+func analyzeFile(ctx context.Context, path, query string) (*Result, error) {
 	abspath, err := filepath.Abs(path)
 	if err != nil {
 		return nil, fmt.Errorf("could not resolve absolute path %s: %w", path, err)
@@ -26,7 +30,7 @@ func analyzeFile(ctx context.Context, path, query string) ([]capture, error) {
 
 	contents, err := os.ReadFile(abspath)
 	if err != nil {
-		return nil, fmt.Errorf("failed read file %s: %w", abspath, err)
+		return nil, fmt.Errorf("read file %s: %w", abspath, err)
 	}
 
 	enryLanguage := enry.GetLanguage(abspath, contents)
@@ -34,25 +38,23 @@ func analyzeFile(ctx context.Context, path, query string) ([]capture, error) {
 		return nil, ErrLangNotDetected
 	}
 
-	tsLanguage, err := languageFromEnry(enryLanguage)
-	if err != nil {
-		if !errors.Is(err, fs.ErrNotExist) {
-			return nil, err
-		}
+	sitterLanguage, err := languageFromEnry(enryLanguage)
+	if errors.Is(err, ErrLangNotSupported) {
+		return nil, err
 	}
 
 	parser := sitter.NewParser()
-	parser.SetLanguage(tsLanguage)
+	parser.SetLanguage(sitterLanguage)
 
 	tree, err := parser.ParseCtx(ctx, nil, contents)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parsing query: %w", err)
 	}
 	root := tree.RootNode()
 
-	q, err := sitter.NewQuery([]byte(query), tsLanguage)
+	q, err := sitter.NewQuery([]byte(query), sitterLanguage)
 	if err != nil {
-		return nil, fmt.Errorf("failed creating query: %w", err)
+		return nil, fmt.Errorf("creating query: %w", err)
 	}
 	defer q.Close()
 
@@ -61,7 +63,7 @@ func analyzeFile(ctx context.Context, path, query string) ([]capture, error) {
 
 	qc.Exec(q, root)
 
-	var captures []capture
+	var captures []Capture
 	for {
 		m, ok := qc.NextMatch()
 		if !ok {
@@ -70,31 +72,47 @@ func analyzeFile(ctx context.Context, path, query string) ([]capture, error) {
 
 		for _, c := range m.Captures {
 			captures = append(captures,
-				capture{
-					content: c.Node.Content(contents),
-					row:     c.Node.StartPoint().Row + 1,
-					column:  c.Node.StartPoint().Column + 1,
+				Capture{
+					Content: c.Node.Content(contents),
+					Row:     c.Node.StartPoint().Row + 1,
+					Column:  c.Node.StartPoint().Column + 1,
 				},
 			)
 		}
 	}
 
-	return captures, nil
+	return &Result{Filepath: abspath, Captures: captures}, nil
 }
 
-type result struct {
-	path     string
-	captures []capture
-	err      error
-}
+func analyzeFilePipeline(ctx context.Context, query string, paths <-chan string, errs chan<- error) <-chan *Result {
+	results := make(chan *Result)
 
-func analyzers(ctx context.Context, query string, paths <-chan string, results chan<- result) {
-	for path := range paths {
-		captures, err := analyzeFile(ctx, path, query)
-		select {
-		case results <- result{path, captures, err}:
-		case <-ctx.Done():
-			return
+	go func() {
+		defer close(results)
+		for path := range paths {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			result, err := analyzeFile(ctx, path, query)
+			if err != nil {
+				select {
+				case errs <- err:
+					continue
+				case <-ctx.Done():
+					return
+				}
+			}
+
+			select {
+			case results <- result:
+			case <-ctx.Done():
+				return
+			}
 		}
-	}
+	}()
+
+	return results
 }
