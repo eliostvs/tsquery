@@ -1,9 +1,6 @@
 name: Test
 
 on:
-  push:
-    branches:
-      - develop
   pull_request:
   workflow_dispatch:
 
@@ -17,6 +14,10 @@ jobs:
         with:
           go-version: '>=1.21'
           cache: true
+
+      - name: install task
+        run: |
+          go install github.com/go-task/task/v3/cmd/task@latest
 
       - name: test
         run: |
