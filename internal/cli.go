@@ -10,7 +10,8 @@ import (
 )
 
 const (
-	appName = "tsquery"
+	appName     = "tsquery"
+	workersFlag = "workers"
 )
 
 var (
@@ -24,7 +25,14 @@ func CLI(args []string, stdout io.Writer, stderr io.Writer) int {
 		Usage:     "Learning things through spaced repetition.",
 		Writer:    stdout,
 		ErrWriter: stderr,
-		UsageText: "<query> [file|directory]",
+		UsageText: "<query> <file|directory>",
+		Flags: []cli.Flag{
+			&cli.IntFlag{
+				Name:  workersFlag,
+				Usage: "number of parallel workers",
+				Value: 2,
+			},
+		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			var root, query string
 
@@ -41,7 +49,7 @@ func CLI(args []string, stdout io.Writer, stderr io.Writer) int {
 				return fmt.Errorf("too many arguments")
 			}
 
-			return app(ctx, options{query: query, workers: 15, root: root, stdout: stdout})
+			return app(ctx, options{query: query, workers: cmd.Int(workersFlag), root: root, stdout: stdout})
 		},
 		Commands: []*cli.Command{
 			{

@@ -1,0 +1,94 @@
+version: "3"
+
+silent: false
+
+vars:
+  NAME: tsquery
+  GOLANGCI_LINT_VERSION: v1.62.2
+  PACKAGES: "./..."
+  VERSION:
+    sh: cat .bumpversion.cfg | grep current_version | awk '{print $3}'
+
+tasks:
+  clean:
+    desc: delete binary and development environment
+    cmds:
+      - rm coverage* 2> /dev/null || true
+      - rm *.log 2> /dev/null || true
+      - go clean -cache -testcache -modcache
+
+  dev:
+    desc: prepare development environment
+    cmds:
+      - go mod download
+      - mkdir -p dist
+      - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b dist/ {{.GOLANGCI_LINT_VERSION}}
+
+  upgrade:
+    desc: upgrade dependencies
+    cmds:
+      - go run github.com/oligot/go-mod-upgrade@latest
+      - go mod tidy
+
+  run:
+    desc: run app in development mode
+    cmds:
+      - go run ./cmd/{{.NAME}} {{.CLI_ARGS}}
+
+  format:
+    desc: format files
+    cmds:
+      - go run golang.org/x/tools/cmd/goimports@latest -l -w .
+      - go run mvdan.cc/gofumpt@latest -l -w .
+
+  lint:
+    desc: run static checks
+    cmds:
+      - go mod verify
+      - go vet {{.PACKAGES}}
+      - ./dist/golangci-lint run
+
+  test:
+    desc: run unit tests
+    cmds:
+      - mkdir -p dist
+      - go test -buildvcs -race -shuffle=on -cover -coverprofile=dist/coverage.out {{.PACKAGES}} {{.CLI_ARGS}}
+
+  audit:
+    desc: run security checks
+    cmds:
+      - go run golang.org/x/vuln/cmd/govulncheck@latest {{.PACKAGES}}
+
+  test-report:
+    desc: shows coverage report
+    deps: [test]
+    cmds:
+      - go tool cover -html=dist/coverage.out
+
+  build:
+    desc: build the application
+    cmds:
+      - mkdir -p dist
+      - go build -ldflags='-s -w -extldflags "-static"' -o dist/{{.NAME}} ./cmd/tsquery/
+    env:
+      CGO_ENABLED: 1
+      GOOS: "{{.GOOS}}"
+      GOARCH: "{{.GOARCH}}"
+
+  release:
+    desc: create a new release
+    cmds:
+      - git flow init -d
+      - |
+        if ! grep -q '\[Unreleased\]' CHANGELOG.md; then
+          echo 'Create the [Unreleased] section in the changelog first!'
+          exit 1
+        fi
+      - bumpversion --verbose --tag --commit {{.CLI_ARGS}}
+      - git flow release start {{.VERSION}}
+      - GIT_MERGE_AUTOEDIT=no git flow release finish -m "Merge branch release/{{.VERSION}}" -T {{.VERSION}} {{.VERSION}} -p
+
+  goreleaser:
+    desc: create snapshot release
+    cmds:
+      - go run github.com/goreleaser/goreleaser@latest build --clean --snapshot --single-target
