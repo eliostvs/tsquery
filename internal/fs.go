@@ -30,7 +30,6 @@ func walkDirPipeline(ctx context.Context, root string, errc chan<- error) <-chan
 
 			return nil
 		})
-
 		if err != nil {
 			select {
 			case errc <- err:
