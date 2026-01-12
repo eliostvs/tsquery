@@ -3,7 +3,7 @@ module github.com/eliostvs/tsquery
 go 1.23
 
 require (
-	github.com/go-enry/go-enry/v2 v2.9.2
+	github.com/go-enry/go-enry/v2 v2.9.3
 	github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82
 	github.com/urfave/cli/v3 v3.6.1
 )
