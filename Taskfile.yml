@@ -67,6 +67,11 @@ tasks:
     cmds:
       - go run ./cmd/{{.NAME}} {{.CLI_ARGS}}
 
+  install:
+    desc: Install the binary to GOPATH/bin
+    cmds:
+      - go install ./cmd/{{.NAME}}
+
   build:
     desc: Build the binary
     cmds:
