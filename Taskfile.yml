@@ -4,8 +4,8 @@ silent: true
 
 vars:
   NAME: tsquery
-  GOLANGCI_LINT_VERSION: 2.5.0
-  PACKAGES: ./...
+  GOLANGCI_LINT_VERSION: 2.9.0
+  PACKAGES: "./..."
   VERSION:
     sh: cat .bumpversion.cfg | grep current_version | awk '{print $3}'
 
