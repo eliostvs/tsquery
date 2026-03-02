@@ -63,7 +63,7 @@ tasks:
       - go tool cover -html=dist/coverage.out
 
   run:
-    desc: Run the application in development mode
+    desc: Run the application
     cmds:
       - go run ./cmd/{{.NAME}} {{.CLI_ARGS}}
 
